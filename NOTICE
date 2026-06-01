@@ -1,17 +1,11 @@
 claude-code-usage-monitor-linux
-================================
 
-This project is a Linux/Waybar port derived from the original Windows
-taskbar application:
+Linux/Waybar port, Copyright (c) 2026 Arron Craig.
 
-    Claude Code Usage Monitor
-    Copyright (c) 2025 Craig Constable
-    https://github.com/CodeZeno/Claude-Code-Usage-Monitor
+Derived from "Claude Code Usage Monitor" (a Windows taskbar app),
+Copyright (c) 2025 Craig Constable, distributed under the MIT License:
+https://github.com/CodeZeno/Claude-Code-Usage-Monitor
 
-The original work is distributed under the MIT License (see LICENSE).
 Substantial portions of the polling, credential, localization, and
-usage-formatting logic originate from that project and are reused here
-under the terms of that license.
-
-Linux/Waybar port and subsequent modifications:
-    Copyright (c) 2026 Arron Craig
+usage-formatting logic originate from that project and are reused here under
+the terms of the MIT License (see LICENSE).

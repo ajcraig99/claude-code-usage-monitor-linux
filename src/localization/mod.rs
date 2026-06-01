@@ -7,12 +7,6 @@ mod korean;
 mod spanish;
 mod traditional_chinese;
 
-use windows::core::PWSTR;
-use windows::Win32::Globalization::{
-    GetUserDefaultLocaleName, GetUserDefaultUILanguage, GetUserPreferredUILanguages,
-    LCIDToLocaleName, LOCALE_ALLOW_NEUTRAL_NAMES, MAX_LOCALE_NAME, MUI_LANGUAGE_NAME,
-};
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LanguageId {
     English,
@@ -26,43 +20,6 @@ pub enum LanguageId {
 }
 
 impl LanguageId {
-    pub const ALL: [LanguageId; 8] = [
-        LanguageId::English,
-        LanguageId::Dutch,
-        LanguageId::Spanish,
-        LanguageId::French,
-        LanguageId::German,
-        LanguageId::Japanese,
-        LanguageId::Korean,
-        LanguageId::TraditionalChinese,
-    ];
-
-    pub fn code(self) -> &'static str {
-        match self {
-            Self::English => "en",
-            Self::Dutch => "nl",
-            Self::Spanish => "es",
-            Self::French => "fr",
-            Self::German => "de",
-            Self::Japanese => "ja",
-            Self::Korean => "ko",
-            Self::TraditionalChinese => "zh-TW",
-        }
-    }
-
-    pub fn native_name(self) -> &'static str {
-        match self {
-            Self::English => "English",
-            Self::Dutch => "Nederlands",
-            Self::Spanish => "Español",
-            Self::French => "Français",
-            Self::German => "Deutsch",
-            Self::Japanese => "日本語",
-            Self::Korean => "한국어",
-            Self::TraditionalChinese => "繁體中文",
-        }
-    }
-
     pub fn strings(self) -> Strings {
         match self {
             Self::English => english::STRINGS,
@@ -73,19 +30,6 @@ impl LanguageId {
             Self::Japanese => japanese::STRINGS,
             Self::Korean => korean::STRINGS,
             Self::TraditionalChinese => traditional_chinese::STRINGS,
-        }
-    }
-
-    pub fn update_via_winget_label(self) -> &'static str {
-        match self {
-            Self::English => english::UPDATE_VIA_WINGET_LABEL,
-            Self::Dutch => dutch::UPDATE_VIA_WINGET_LABEL,
-            Self::Spanish => spanish::UPDATE_VIA_WINGET_LABEL,
-            Self::French => french::UPDATE_VIA_WINGET_LABEL,
-            Self::German => german::UPDATE_VIA_WINGET_LABEL,
-            Self::Japanese => japanese::UPDATE_VIA_WINGET_LABEL,
-            Self::Korean => korean::UPDATE_VIA_WINGET_LABEL,
-            Self::TraditionalChinese => traditional_chinese::UPDATE_VIA_WINGET_LABEL,
         }
     }
 
@@ -119,6 +63,9 @@ impl LanguageId {
     }
 }
 
+// Many fields drive the Windows GUI (menus, dialogs) and are unused by the
+// Unix/Waybar front-end, but every language file populates the full set.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct Strings {
     pub window_title: &'static str,
@@ -167,80 +114,20 @@ pub fn resolve_language(language_override: Option<LanguageId>) -> LanguageId {
     language_override.unwrap_or_else(detect_system_language)
 }
 
+/// Detect the UI language from POSIX locale environment variables, in the
+/// order glibc itself honours them: LC_ALL overrides everything, then the
+/// category-specific LC_MESSAGES, then LANG as the fallback.
 pub fn detect_system_language() -> LanguageId {
-    preferred_ui_languages()
-        .into_iter()
-        .find_map(|locale| LanguageId::from_code(&locale))
-        .or_else(default_ui_locale)
-        .or_else(default_locale_name)
-        .unwrap_or(LanguageId::English)
-}
-
-pub fn update_via_winget(language: LanguageId) -> &'static str {
-    language.update_via_winget_label()
-}
-
-fn preferred_ui_languages() -> Vec<String> {
-    unsafe {
-        let mut num_languages = 0u32;
-        let mut buffer_len = 0u32;
-        if GetUserPreferredUILanguages(
-            MUI_LANGUAGE_NAME,
-            &mut num_languages,
-            PWSTR::null(),
-            &mut buffer_len,
-        )
-        .is_err()
-            || buffer_len == 0
-        {
-            return Vec::new();
+    for var in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        let Some(value) = std::env::var_os(var) else {
+            continue;
+        };
+        let value = value.to_string_lossy();
+        // Strip encoding and modifier suffixes: "en_AU.UTF-8@euro" -> "en_AU".
+        let locale = value.split(['.', '@']).next().unwrap_or(&value);
+        if let Some(language) = LanguageId::from_code(locale) {
+            return language;
         }
-
-        let mut buffer = vec![0u16; buffer_len as usize];
-        if GetUserPreferredUILanguages(
-            MUI_LANGUAGE_NAME,
-            &mut num_languages,
-            PWSTR(buffer.as_mut_ptr()),
-            &mut buffer_len,
-        )
-        .is_err()
-        {
-            return Vec::new();
-        }
-
-        buffer
-            .split(|unit| *unit == 0)
-            .filter(|part| !part.is_empty())
-            .map(String::from_utf16_lossy)
-            .collect()
     }
-}
-
-fn default_ui_locale() -> Option<LanguageId> {
-    unsafe {
-        let lang_id = GetUserDefaultUILanguage();
-        let mut buffer = [0u16; MAX_LOCALE_NAME as usize];
-        let len = LCIDToLocaleName(
-            lang_id as u32,
-            Some(&mut buffer),
-            LOCALE_ALLOW_NEUTRAL_NAMES,
-        );
-        if len <= 1 {
-            return None;
-        }
-        let locale = String::from_utf16_lossy(&buffer[..(len as usize - 1)]);
-        LanguageId::from_code(&locale)
-    }
-}
-
-fn default_locale_name() -> Option<LanguageId> {
-    unsafe {
-        let mut buffer = [0u16; MAX_LOCALE_NAME as usize];
-        let len = GetUserDefaultLocaleName(&mut buffer);
-        if len <= 1 {
-            return None;
-        }
-        let locale = String::from_utf16_lossy(&buffer[..(len as usize - 1)]);
-        LanguageId::from_code(&locale)
-    }
+    LanguageId::English
 }
